@@ -63,11 +63,13 @@ python pixel_denoise.py overlay sprite.png -o overlay.png
 python pixel_denoise.py calibrate examples/original.png examples/flagged.png
 ```
 
-In the GUI: the four **Quick controls** (0–20) are the everyday knobs; tick
-**Show advanced** to fine-tune the raw thresholds (they track the macros and
-override them once you drag one). Cyan = pixels removed, magenta = pixels
-replaced. Save-cleaned / Apply-to-folder use the current settings; "Print params"
-dumps both the macro values and the resolved thresholds to the console.
+In the GUI: by default you see two panels — **original** and **cleaned**. Tick
+**Show detection panel** for a third panel highlighting what changed (cyan =
+removed, magenta = replaced). The four **Quick controls** (0–20) are the everyday
+knobs; tick **Show advanced** to fine-tune the raw thresholds (they track the
+macros and override them once you drag one). Save-cleaned / Apply-to-folder use
+the current settings; "Print params" dumps both the macro values and the resolved
+thresholds to the console.
 
 **Macro scale (0–20):** `0` turns a channel off; `10` matches the strongest pass
 the old 0–10 slider could do; `10–20` is extra-strength headroom beyond that.

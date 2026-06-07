@@ -76,9 +76,13 @@ class App:
         for name, label in MACROS:
             self._make_macro(ctrl, name, label)
 
+        self.show_detection = tk.BooleanVar(value=getattr(self, "_show_det", False))
+        ttk.Checkbutton(ctrl, text="Show detection panel", variable=self.show_detection,
+                        command=lambda: self.render(rebuild=False)).pack(anchor="w", pady=(8, 0))
+
         self.show_adv = tk.BooleanVar(value=False)
         ttk.Checkbutton(ctrl, text="Show advanced", variable=self.show_adv,
-                        command=self._toggle_adv).pack(anchor="w", pady=(8, 0))
+                        command=self._toggle_adv).pack(anchor="w")
         self.adv_frame = ttk.Frame(ctrl)
         self.adv_vals = {}
         for attr, label, lo, hi, step in ADVANCED:
@@ -244,16 +248,19 @@ class App:
                 self.params = pd.Params(**base)
             else:
                 self.params = pd.params_from_macros(self.macros)
+            self._show_det = bool(d.get("show_detection", False))
             return d.get("image")
         except Exception:
             self.macros = dict(pd.DEFAULT_MACROS)
             self.params = pd.params_from_macros(self.macros)
+            self._show_det = False
             return None
 
     def save_settings(self):
         try:
             json.dump({"macros": self.macros, "params": asdict(self.params),
-                       "image": self.path}, open(self._settings_path(), "w"), indent=2)
+                       "image": self.path, "show_detection": self.show_detection.get()},
+                      open(self._settings_path(), "w"), indent=2)
         except Exception:
             pass
 
@@ -288,11 +295,12 @@ class App:
         out, flag, remove, replace = pd.clean(f, self.params)
 
         orig = np.dstack([f.rgb, f.alpha]).astype(np.uint8)
-        det = orig.copy()
-        det[remove] = (0, 220, 220, 255)
-        det[replace] = (230, 0, 230, 255)
-
-        panels = [self._panel(orig), self._panel(out), self._panel(det)]
+        panels = [self._panel(orig), self._panel(out)]   # start | final
+        if self.show_detection.get():                    # optional third panel
+            det = orig.copy()
+            det[remove] = (0, 220, 220, 255)
+            det[replace] = (230, 0, 230, 255)
+            panels.append(self._panel(det))
         gap = 8
         h = max(p.height for p in panels)
         w = sum(p.width for p in panels) + gap * (len(panels) - 1)
