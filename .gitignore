@@ -1,0 +1,7 @@
+build/
+dist/
+__pycache__/
+*.spec
+*.exe
+_smoke.png
+denoise_settings.json
