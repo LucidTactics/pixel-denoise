@@ -88,14 +88,16 @@ class Params:
     edge_second: float = 24.0    # near an alpha edge, this lower bar suffices
     edge_frac: float = 0.08      # transp fraction in 5x5 to count as "near edge"
 
-    # --- White/bright-confetti channel: bright, near-grey scattered specks ---
-    # Catches white specks the isolation channel misses when they clump (a 2-3px
-    # white blob has a similar neighbour, so its second_min stays low). True white
-    # confetti is brighter than its surroundings AND near-grey; green leaf-tips
-    # keep green chroma and are excluded by bright_chroma_max.
+    # --- Bright/dark-confetti channel: scattered luminance specks ---
+    # Catches specks the isolation channel misses when they clump (a 2-3px blob
+    # has a similar neighbour, so its second_min stays low). A speck is brighter
+    # (or darker) than its surroundings; `bright_chroma_max` bounds how saturated
+    # it may be (low = near-grey/white only, protecting green leaf-tips; the macro
+    # widens it as you turn the channel up, to also catch pale-coloured specks).
     bright_spike: float = 22.0       # L above neighbour-median L to be a bright speck
-    bright_chroma_max: float = 16.0  # only near-grey pixels (excludes green tips)
-    bright_cluster_max: int = 8      # only small scattered blobs, never the big canopy
+    dark_spike: float = 55.0         # L below neighbour-median L to be a dark speck (high=off)
+    bright_chroma_max: float = 17.0  # max chroma to still count (widens with the macro)
+    bright_cluster_max: int = 7      # only small scattered blobs, never the big canopy
 
     # --- Colour-confetti channel: saturated, isolated, scattered specks ---
     color_spike: float = 18.0    # chroma above neighbour-median chroma
@@ -230,9 +232,12 @@ def detect(f: Features, p: Params) -> np.ndarray:
     near_edge = f.transp_frac >= p.edge_frac
     isolation = (f.second_min > p.second_thresh) | (near_edge & (f.second_min > p.edge_second))
 
-    # White/bright channel: scattered, near-grey, brighter-than-neighbours blobs.
-    bright = _small_clusters(
-        op & (f.bright > p.bright_spike) & (f.chroma_abs < p.bright_chroma_max),
+    # Bright/dark channel: scattered blobs much brighter OR darker than their
+    # neighbours, within the chroma ceiling, in a small cluster (so the big legit
+    # sunlit canopy / shadow mass is never touched).
+    lum_spike = (f.bright > p.bright_spike) | (-f.bright > p.dark_spike)
+    speck = _small_clusters(
+        op & lum_spike & (f.chroma_abs < p.bright_chroma_max),
         p.bright_cluster_max)
 
     # Colour channel: scattered, more-saturated, somewhat-isolated blobs.
@@ -240,7 +245,7 @@ def detect(f: Features, p: Params) -> np.ndarray:
         op & (f.chroma_spike > p.color_spike) & (f.second_min > p.edge_second),
         p.color_cluster_max)
 
-    flag = op & (isolation | bright | color)
+    flag = op & (isolation | speck | color)
     # Floating specks: any opaque pixel in a tiny disconnected island.
     flag |= op & (f.island_size <= p.island_max)
     return flag
@@ -267,7 +272,7 @@ def classify(flag: np.ndarray, f: Features, p: Params):
 MACROS = ("strength", "white", "color", "edge")
 MACRO_LABELS = {
     "strength": "Overall strength",
-    "white": "White / bright confetti",
+    "white": "Bright / dark confetti",
     "color": "Coloured confetti",
     "edge": "Edge & fringe cleanup",
 }
@@ -279,7 +284,12 @@ DEFAULT_MACROS = {"strength": 6.0, "white": 7.0, "color": 7.0, "edge": 8.0}
 # Per-param ramp points: (weak @v=1, old-max @v=10, new-strong @v=20).
 _MACRO_RAMP = {
     "strength": {"second_thresh": (65.0, 18.0, 10.0)},
-    "white":    {"bright_spike": (40.0, 12.0, 7.0), "bright_cluster_max": (4, 14, 22)},
+    # As "white" climbs it lowers the bright bar, widens the chroma ceiling (so
+    # pale-coloured brights get caught too), and engages dark-speck detection.
+    "white":    {"bright_spike": (40.0, 12.0, 7.0),
+                 "bright_chroma_max": (12.0, 22.0, 34.0),
+                 "dark_spike": (90.0, 40.0, 22.0),
+                 "bright_cluster_max": (4, 8, 12)},
     "color":    {"color_spike": (34.0, 10.0, 6.0),  "color_cluster_max": (3, 12, 18)},
     "edge":     {"edge_frac": (0.20, 0.04, 0.0), "edge_second": (40.0, 14.0, 8.0),
                  "island_max": (1, 8, 12)},
@@ -288,7 +298,7 @@ _INT_PARAMS = {"bright_cluster_max", "color_cluster_max", "island_max"}
 # Values that switch a channel off when its macro is at 0.
 _MACRO_OFF = {
     "strength": {"second_thresh": 999.0},
-    "white":    {"bright_spike": 999.0, "bright_cluster_max": 0},
+    "white":    {"bright_spike": 999.0, "dark_spike": 999.0, "bright_cluster_max": 0},
     "color":    {"color_spike": 999.0, "color_cluster_max": 0},
     "edge":     {"edge_frac": 1.0, "edge_second": 999.0, "island_max": 0},
 }
@@ -423,7 +433,7 @@ def _save(arr: np.ndarray, path: str):
 
 
 def cmd_clean(args):
-    p = Params()
+    p = params_from_macros(DEFAULT_MACROS)
     os.makedirs(args.out, exist_ok=True)
     for src in args.inputs:
         img = Image.open(src)
@@ -439,7 +449,7 @@ def cmd_clean(args):
 
 
 def cmd_overlay(args):
-    p = Params()
+    p = params_from_macros(DEFAULT_MACROS)
     img = Image.open(args.input)
     f = compute_features(img, p)
     _save(overlay(f, p), args.out)
@@ -447,7 +457,7 @@ def cmd_overlay(args):
 
 
 def cmd_calibrate(args):
-    p = Params()
+    p = params_from_macros(DEFAULT_MACROS)
     res = calibrate(Image.open(args.original), Image.open(args.flagged), p, tol=args.tol)
     print("Params:", asdict(p))
     for k, v in res.items():

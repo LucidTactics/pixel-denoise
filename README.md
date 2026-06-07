@@ -32,11 +32,13 @@ catch more, set it to 0 to switch the channel off.
    highlight, vein) runs in a streak → ≥2 similar neighbours → small `second_min`;
    a speck is lone/paired → its 2nd-nearest is far → large `second_min`. Far more
    selective than raw local contrast, which fires on every legit edge.
-2. **White / bright confetti** — bright, **near-grey** blobs (green leaf-tips keep
-   green chroma and are excluded), restricted to **small scattered clusters** so
-   the big legit sunlit canopy is never touched. Catches white specks the
-   isolation channel misses when they clump (a 2-3px white blob has a similar
-   neighbour, so its `second_min` stays low).
+2. **Bright / dark confetti** — blobs much **brighter or darker** than their
+   neighbours, within a chroma ceiling, restricted to **small scattered clusters**
+   so the big legit sunlit canopy / shadow mass is never touched. Catches specks
+   the isolation channel misses when they clump (a 2-3px blob has a similar
+   neighbour, so its `second_min` stays low). Turning the slider up lowers the
+   brightness bar, **widens the chroma ceiling** (so pale-coloured brights get
+   caught, not just near-grey/white), and engages dark-speck detection.
 3. **Coloured confetti** — more-saturated, somewhat-isolated, small scattered
    clusters (alien magenta/cyan specks on otherwise-uniform art).
 4. **Edge & fringe** — near the alpha edge (`edge_frac` wide) a lower isolation
@@ -78,9 +80,11 @@ sliders to the calibrated defaults.
 
 Start with the Quick controls:
 
-- **White specks left over** → turn up **White / bright confetti**.
+- **Bright / dark / pale specks left over** → turn up **Bright / dark confetti**
+  (turning it past ~10 also catches pale-coloured and dark specks).
 - **Coloured specks left over** → turn up **Coloured confetti**.
-- **Generally not catching enough** → turn up **Overall strength**.
+- **Generally not catching enough** → turn up **Overall strength** (best for
+  isolated specks; some clumped same-colour pairs need the bright channel instead).
 - **Ragged/noisy silhouette edge** → turn up **Edge & fringe cleanup**.
 - **Eating real detail** → turn the offending channel *down*.
 
